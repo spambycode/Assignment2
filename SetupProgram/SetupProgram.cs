@@ -27,7 +27,8 @@ namespace SetupProgram
                 fileNameSuffix = "Just26";
             }
 
-            DeleteFile("Maindata.txt");
+            DeleteFile("Maindata.bin");
+            DeleteFile("MainDataCollisions.bin");
 
             // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 

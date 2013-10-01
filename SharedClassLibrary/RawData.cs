@@ -25,6 +25,7 @@ namespace SharedClassLibrary
         public string YEAROFINDEP { get; set; }
         public string POPULATION { get; set; }
         public string LIFEEXPECTANCY { get; set; }
+        public string GNP { get; set; }
         
 
         //**************************** PUBLIC CONSTRUCTOR(S) ***********************
@@ -44,6 +45,7 @@ namespace SharedClassLibrary
             YEAROFINDEP = recordSplit[6];
             POPULATION = recordSplit[7];
             LIFEEXPECTANCY = recordSplit[8];
+            GNP = recordSplit[9];
         }
 
         public RawData(UserInterface LogFile, string filename)
@@ -85,6 +87,7 @@ namespace SharedClassLibrary
                 YEAROFINDEP = split[6];
                 POPULATION = split[7];
                 LIFEEXPECTANCY = split[8];
+                GNP = split[9];
 
 
                 return false;

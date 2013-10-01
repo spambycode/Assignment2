@@ -13,22 +13,31 @@ namespace SharedClassLibrary
     {
         //**************************** PRIVATE DECLARATIONS ************************
 
-        private FileStream mainDataFile;                //RandomAccess File structure
+        private FileStream fMainDataFile;                  //RandomAccess File structure
+        private FileStream fCollisionDataFile;
+        private BinaryWriter bMDataFileWriter;
+        private BinaryReader bMDataFileReader;
+        private BinaryWriter bCollisionDataFileWriter;
+
         private UserInterface _LogFile;                  //Log file Access
-        private string fileName;                        //Holds the file name of main data
-        private int headerCount = 0;                    //Counts how many recorders
+        private string mDataFileName;                        //Holds the file name of main data
+        private string cDataFileName;
+
+        private short nHomeRec = 0;                    //Counts how many recorders
+        private short nCollRec = 0;
+        private short MAX_N_HOME_LOC;
+        private char[] collisionFileName;
+
         private int _sizeOfHeaderRec;                   //Size of the reader record
         private int _sizeOfDataRec;                     //Size of all the data fields
-        private char[] _headerRec = new char[3];        //Header rec of the document
-        private char[] _id = new char[3];               //ID of record
         private char[] _code = new char[3];             //Country code
         private char[] _name = new char[17];            //Name of country
-        private char[] _continent = new char[11];       //What continent the country is located
-        private char[] _region = new char[10];          //What region the country is located
-        private char[] _surfaceArea = new char[8];      //Size of the country
-        private char[] _yearOfIndep = new char[5];      //What year they went independent
-        private char[] _population = new char[10];      //Total population of the country
-        private char[] _lifeExpectancy = new char[4];   //The average time someone is alive in the country
+        private char[] _continent = new char[12];       //What continent the country is located
+        private int  _surfaceArea;                      //Size of the country
+        private short _yearOfIndep;                     //What year they went independent
+        private long _population;                       //Total population of the country
+        private float _lifeExpectancy;                  //The average time someone is alive in the country
+        private int _gnp;                                //Gross national product
 
         //**************************** PUBLIC GET/SET METHODS **********************
 
@@ -37,24 +46,35 @@ namespace SharedClassLibrary
         public MainData(UserInterface LogInterFace)
         {
             //Calculate sizes for RandomAccess byte offset
-            _sizeOfHeaderRec = _headerRec.Length;
-            _sizeOfDataRec   = _id.Length + _code.Length + _name.Length + _continent.Length
-                               + _region.Length + _surfaceArea.Length + _yearOfIndep.Length
-                               + _population.Length + _lifeExpectancy.Length;
+            _sizeOfHeaderRec = sizeof(short);
+            _sizeOfDataRec   = + _code.Length + _name.Length + _continent.Length
+                               + sizeof(int) +sizeof(short) + sizeof(long) + 
+                                 sizeof(float) + sizeof(int);
 
 
             //Open and create a new file
-            fileName = "MainData.txt";
+            mDataFileName = "MainData.txt";
+            cDataFileName = "MainDataCollision.bin";
+            collisionFileName = cDataFileName.ToCharArray();
 
             //Allow access to log file
             _LogFile = LogInterFace;
 
             //Open or Create Main data file
-            mainDataFile = new FileStream(fileName, FileMode.OpenOrCreate);
-            _LogFile.WriteToLog("Opened " + fileName + " File");
+            fMainDataFile = new FileStream(mDataFileName, FileMode.OpenOrCreate);
+            bMDataFileReader = new BinaryReader(fMainDataFile);
+            bMDataFileWriter = new BinaryWriter(fMainDataFile);
+
+            fCollisionDataFile = new FileStream(cDataFileName, FileMode.OpenOrCreate);
+            bCollisionDataFileWriter = new BinaryWriter(fCollisionDataFile);
+            
+         
+            _LogFile.WriteToLog("Opened " + mDataFileName + " File");
+            _LogFile.WriteToLog("Opened " + cDataFileName + " File");
+            MAX_N_HOME_LOC = 20;
 
             //Get total records in file (Default is 0)
-            headerCount = ReadHeaderRec();
+            nHomeRec = ReadHeaderRecCount();
         }
 
         //**************************** PUBLIC SERVICE METHODS **********************
@@ -69,7 +89,7 @@ namespace SharedClassLibrary
 
             InitializeFixLengthVaraibles(RD);
 
-            int RRN = CalculateRRN(RD.ID);
+            int RRN = CalculateRRN(_code);
             int byteOffSet = CalculateByteOffSet(RRN);
 
             if(RecordIsFilled(byteOffSet))
@@ -78,12 +98,14 @@ namespace SharedClassLibrary
             }
 
 
-            ++headerCount; //increase amount of records
+            ++nHomeRec; //increase amount of records
             WriteOneCountry(byteOffSet);
 
             return true;
 
         }
+
+
 
         //-------------------------------------------------------------------------
         /// <summary>
@@ -91,8 +113,18 @@ namespace SharedClassLibrary
         /// </summary>
         public void FinishUp()
         {
-            mainDataFile.Close();
-            _LogFile.WriteToLog("Closed " + fileName + " File");
+            WriteHeaderRec();
+            bMDataFileReader.Close();
+            bMDataFileWriter.Close();
+            fMainDataFile.Close();
+
+            bCollisionDataFileWriter.Close();
+            fCollisionDataFile.Close();
+
+
+            _LogFile.WriteToLog("Closed " + mDataFileName + " File");
+            _LogFile.WriteToLog("Closed " + cDataFileName + " File");
+
         }
 
         //-------------------------------------------------------------------------
@@ -102,31 +134,7 @@ namespace SharedClassLibrary
         /// <param name="id">ID of recorded requested</param>
         public void QueryByID(string queryID)
         {
-            string recordReturn = "";
-            int ID = Convert.ToInt32(queryID.Trim());
-            int RRN = 0;
-            byte[] record = { 0 };
-
-            if (ID > 0 && ID <= 300)
-            {
-                RRN = CalculateRRN(ID);
-                record = ReadOneRecord(RRN);
-
-                if (record[0] != '\0')
-                {
-                    recordReturn = FormatRecord(Encoding.UTF8.GetString(record));
-                }
-                else
-                {
-                    recordReturn = string.Format("**ERROR: no country with id {0}", queryID);
-                }
-            }
-            else
-            {
-                recordReturn = string.Format("**ERROR: no country with id {0}", queryID);
-            }
-
-            _LogFile.WriteToLog(recordReturn);
+            _LogFile.WriteToLog("**Error: Sorry Query By ID is no longer working");
         }
 
         //-------------------------------------------------------------------------------
@@ -137,27 +145,7 @@ namespace SharedClassLibrary
         /// <returns>An Array of non-error records</returns>
         public void ListById()
         {
-            byte[] QueryRecord;                //Record that was returned
-            int id = 1;
-            int RRN = 0;
-
-            _LogFile.WriteToLog(FormatHeader());
-
-            for(int i = 0; i < headerCount;)
-            {
-                RRN = CalculateRRN(id++);
-                QueryRecord = ReadOneRecord(RRN);
-
-                if(QueryRecord[0] != 0)
-                {
-                    _LogFile.WriteToLog(FormatRecord(Encoding.UTF8.GetString(QueryRecord)));
-                    ++i;
-                }
-
-            }
-
-
-
+            _LogFile.WriteToLog("**Error: Sorry Listing records no longer works");
         }
 
 
@@ -168,43 +156,7 @@ namespace SharedClassLibrary
         /// <param name="id">Record id</param>
         public void DeleteRecordByID(string queryID)
         {
-            byte[] data = new byte[_sizeOfDataRec];
-            int ID = Convert.ToInt32(queryID);
-
-
-            if (ID > 0 && ID <= 900)
-            {
-
-                int byteOffSet = CalculateByteOffSet(CalculateRRN(ID));
-
-
-                mainDataFile.Seek(byteOffSet, SeekOrigin.Begin);
-                mainDataFile.Read(data, 0, data.Length);
-
-                if (data[0] != '\0')
-                {
-                    string name = Encoding.UTF8.GetString(data)
-                                            .Substring(_id.Length + _code.Length, _name.Length).Trim();
-
-                    //Apply null byte to record
-                    mainDataFile.Seek(byteOffSet, SeekOrigin.Begin);
-                    mainDataFile.WriteByte(0);
-
-                    //Subtract record count and write new header
-                    --headerCount;
-                    WriteHeaderRec();
-
-                    _LogFile.WriteToLog("OK, " + name + "\t\tDeleted");
-                }
-                else
-                {
-                    _LogFile.WriteToLog("Sorry no country with id " + queryID);
-                }
-            }
-            else
-            {
-                _LogFile.WriteToLog("Sorry no country with id " + queryID);
-            }
+            _LogFile.WriteToLog("**Error: Sorry Deleting recorded is no longer working");
         }
 
 
@@ -215,23 +167,7 @@ namespace SharedClassLibrary
         /// <param name="record">A string with CSV style record</param>
         public void InsertRecord(string record)
         {
-
-            /*var recordSplit = record.Split(',');
-
-            //Must of at least 9 records for everything to work
-            if(recordSplit.Length >= 9)
-            {
-                RawData RD = new RawData(recordSplit);
-                StoreOneCountry(RD);
-                _LogFile.WriteToLog("IN : OK, " + recordSplit[2] + " Has been added to MainData");
-            }
-            else
-            {
-                _LogFile.WriteToLog("IN : Wrong input was found");
-            }*/
-
             _LogFile.WriteToLog("*IN: Is not operational at this time");
-
 
         }
 
@@ -248,18 +184,6 @@ namespace SharedClassLibrary
             return _sizeOfHeaderRec + ((RRN - 1) * _sizeOfDataRec);
         }
 
-
-        //-------------------------------------------------------------------------
-        /// <summary>
-        /// Returns the RRN value of the given parameter
-        /// </summary>
-        /// <param name="id">ID of query record</param>
-        /// <returns></returns>
-        private int CalculateRRN(int id)
-        {
-            return id;
-        }
-
         //--------------------------------------------------------------------------
         /// <summary>
         /// Gives the RRN to where the information needs to be stored to stored or 
@@ -267,9 +191,14 @@ namespace SharedClassLibrary
         /// </summary>
         /// <param name="id">Id to calculate the RRN of the document</param>
         /// <returns>The RRN of the main data file</returns>
-        private int CalculateRRN(string id)
+        private int CalculateRRN(char []Code)
         {
-            return CalculateRRN(Int32.Parse(id));
+            int RRN = 0;
+            byte[] asciiBytes = Encoding.ASCII.GetBytes(new string(Code).ToUpper());
+            RRN = ((asciiBytes[0] * asciiBytes[1] * asciiBytes[2]) % MAX_N_HOME_LOC) + 1;
+
+
+            return RRN;
         }
 
         //--------------------------------------------------------------------------
@@ -284,22 +213,20 @@ namespace SharedClassLibrary
             string inFileName = "";
             string inFileId     = "";
 
-            mainDataFile.Seek(byteOffSet, SeekOrigin.Begin);
-            mainDataFile.Read(Data, 0, Data.Length);
+            fMainDataFile.Seek(byteOffSet, SeekOrigin.Begin);
+            fMainDataFile.Read(Data, 0, Data.Length);
 
             if(Data[0] != '\0')  //If there is already data there in the file, a duplicate was found
             {
 
                 //Get the name and ID of the information found in the file
                 inFileName = Encoding.UTF8.GetString(Data)
-                                          .Substring(_id.Length + _code.Length, _name.Length).Trim();
+                                          .Substring( _code.Length, _name.Length).Trim();
 
-                inFileId = Encoding.UTF8.GetString(Data)
-                                        .Substring(0, _id.Length).Trim();
 
                 //Write a nice little error log msg to the file.
-                _LogFile.WriteToLog("**Error: ID "  + new string(_id) + 
-                                        " Not inserted (ID " + inFileId + " belongs to " + inFileName + ")");
+                _LogFile.WriteToLog("**Error: CODE " + new string(_code) +
+                                        " Not inserted (CODE " + inFileName + ")");
 
                 return true;
             }
@@ -316,21 +243,10 @@ namespace SharedClassLibrary
         /// </summary>
         /// <returns>Record amount number</returns>
 
-        private int ReadHeaderRec()
+        private short ReadHeaderRecCount()
         {
-            byte[] recordData = new byte[_sizeOfHeaderRec];
-
-            mainDataFile.Seek(0, SeekOrigin.Begin);
-            mainDataFile.Read(recordData, 0, recordData.Length);
-
-
-            if(recordData[0] != 0)
-            {
-                return Convert.ToInt32(Encoding.UTF8.GetString(recordData));;
-            }
-
-
-            return 0;
+            fMainDataFile.Seek(0, SeekOrigin.Begin);
+            return bMDataFileReader.ReadInt16();
         }
 
         //----------------------------------------------------------------------------------
@@ -339,9 +255,8 @@ namespace SharedClassLibrary
         /// </summary>
         private void WriteHeaderRec()
         {
-            mainDataFile.Seek(0, SeekOrigin.Begin);
-            _headerRec = headerCount.ToString().PadLeft(_headerRec.Length, '0').ToCharArray();
-            WriteOneRecord(_headerRec);
+            fMainDataFile.Seek(0, SeekOrigin.Begin);
+            bMDataFileWriter.Write(nHomeRec);
         }
 
         //------------------------------------------------------------------------------
@@ -417,13 +332,8 @@ namespace SharedClassLibrary
         /// <returns>Returns the amount of records stored in file</returns>
         private int ReadRecordCount()
         {
-            byte[] header = new byte[3];
-
-            mainDataFile.Seek(0, SeekOrigin.Begin);
-            mainDataFile.Read(header, 0, header.Length);
-
-            return Int32.Parse(Encoding.UTF8.GetString(header));
-
+            fMainDataFile.Seek(0, SeekOrigin.Begin);
+            return  bMDataFileReader.ReadInt32();
         }
 
         //--------------------------------------------------------------------------
@@ -436,7 +346,7 @@ namespace SharedClassLibrary
         {
             int byteOffSet    = CalculateByteOffSet(RRN);
 
-            mainDataFile.Seek(byteOffSet, SeekOrigin.Begin);
+            fMainDataFile.Seek(byteOffSet, SeekOrigin.Begin);
 
             return ReadOneRecord();
         }
@@ -449,8 +359,7 @@ namespace SharedClassLibrary
         private byte[] ReadOneRecord()
         {
             byte[] recordData = new byte[_sizeOfDataRec];
-
-            mainDataFile.Read(recordData, 0, recordData.Length);
+            bMDataFileReader.Read(recordData, 0, recordData.Length);
 
             return recordData;
         }
@@ -462,24 +371,21 @@ namespace SharedClassLibrary
         /// <param name="byteOffSet">Where in the file to begin the writing process</param>
         private void WriteOneCountry(int byteOffSet)
         {
-            WriteHeaderRec();
 
-            if(mainDataFile.Length < byteOffSet)
-                mainDataFile.SetLength(byteOffSet);
+            if(fMainDataFile.Length < byteOffSet)
+                fMainDataFile.SetLength(byteOffSet);
 
             //Move file pointer to new location
-            mainDataFile.Seek(byteOffSet, SeekOrigin.Begin);
+            fMainDataFile.Seek(byteOffSet, SeekOrigin.Begin);
 
-            //Write the information to the maindata file
-            WriteOneRecord(_id);
-            WriteOneRecord(_code);
-            WriteOneRecord(_name);
-            WriteOneRecord(_continent);
-            WriteOneRecord(_region);
-            WriteOneRecord(_surfaceArea);
-            WriteOneRecord(_yearOfIndep);
-            WriteOneRecord(_population);
-            WriteOneRecord(_lifeExpectancy);
+            //Write the information to the maindata file;
+            bMDataFileWriter.Write(_code);
+            bMDataFileWriter.Write(_name);
+            bMDataFileWriter.Write(_continent);
+            bMDataFileWriter.Write(_surfaceArea);
+            bMDataFileWriter.Write(_yearOfIndep);
+            bMDataFileWriter.Write(_population);
+            bMDataFileWriter.Write(_lifeExpectancy);
 
         }
 
@@ -491,14 +397,10 @@ namespace SharedClassLibrary
         /// <param name="RD">Class that holds strings at random lengths</param>
         private void InitializeFixLengthVaraibles(RawData RD)
         {
-            string lifeExp = "";
-
-            _id          = RD.ID.PadLeft(_id.Length, '0').ToCharArray(0, _id.Length);
             _code        = RD.CODE.PadLeft(_code.Length, ' ').ToCharArray(0, _code.Length);
             _name        = RD.NAME.PadRight(_name.Length, ' ').ToCharArray(0, _name.Length);
             _continent   = RD.CONTINENT.PadRight(_continent.Length, ' ').ToCharArray(0, _continent.Length);
-            _region      = RD.REGION.PadRight(_region.Length, ' ').ToCharArray(0, _region.Length);
-            _surfaceArea = RD.SURFACEAREA.PadLeft(_surfaceArea.Length, '0').ToCharArray(0, _surfaceArea.Length);
+            _surfaceArea = Int32.Parse(RD.SURFACEAREA);
 
 
             if(RD.YEAROFINDEP.Contains("-"))
@@ -506,34 +408,19 @@ namespace SharedClassLibrary
                 RD.YEAROFINDEP = RD.YEAROFINDEP.Replace('-', '0');
             }
 
-            _yearOfIndep = RD.YEAROFINDEP.PadLeft(_yearOfIndep.Length, '0').ToCharArray(0, _yearOfIndep.Length);
-            _population  = RD.POPULATION.PadLeft(_population.Length, '0').ToCharArray(0, _population.Length);
+            _yearOfIndep = Int16.Parse(RD.YEAROFINDEP);
+            _population  = long.Parse(RD.POPULATION);
 
             //Check this (needs to be XX.X or X.XX or null)
             if(RD.LIFEEXPECTANCY.ToUpper().CompareTo("NULL") == 0)
             {
-                lifeExp = RD.LIFEEXPECTANCY;
-            }
-            else
-            {
-                lifeExp = string.Format("{0:N1}", Convert.ToDecimal(RD.LIFEEXPECTANCY));
+                _lifeExpectancy = 0.0f;
             }
 
-            _lifeExpectancy = lifeExp.ToCharArray();
+            _lifeExpectancy = float.Parse(RD.LIFEEXPECTANCY);
+            _gnp            = Int32.Parse(RD.GNP);
 
 
         }
-
-        //-------------------------------------------------------------------------------
-        /// <summary>
-        /// Uses the write function in file stream to write a record to the main file
-        /// </summary>
-        /// <param name="input">Input wanted to write to file</param>
-
-        private void WriteOneRecord(char[] input)
-        {
-            mainDataFile.Write(Encoding.ASCII.GetBytes(input), 0, input.Length);
-        }
-
     }
 }
