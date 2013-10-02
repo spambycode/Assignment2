@@ -39,6 +39,7 @@ namespace SharedClassLibrary
         private long _population;                       //Total population of the country
         private float _lifeExpectancy;                  //The average time someone is alive in the country
         private int _gnp;                                //Gross national product
+        private short _link;                            //Link to collision data
 
         //**************************** PUBLIC GET/SET METHODS **********************
 
@@ -139,6 +140,37 @@ namespace SharedClassLibrary
         public void QueryByID(string queryID)
         {
             _LogFile.WriteToLog("**Error: Sorry Query By ID is no longer working");
+        }
+
+        /// <summary>
+        /// Finds the code related to the input.
+        /// </summary>
+        /// <param name="queryCode">Code that is stored in the file</param>
+        public void QueryByCode(string queryCode)
+        {
+            string recordReturn = "";
+            char[] Code = queryCode.Trim().ToCharArray();
+            byte[] record = { 0 };
+
+            if (ID > 0 && ID <= 300)
+            {
+                ReadOneRecord(HashFunction(Code));
+
+                if (record[0] != '\0')
+                {
+                    recordReturn = FormatRecord(Encoding.UTF8.GetString(record));
+                }
+                else
+                {
+                    recordReturn = string.Format("**ERROR: no country with code {0}", queryCode.Trim());
+                }
+            }
+            else
+            {
+                recordReturn = string.Format("**ERROR: no country with id {0}", queryCode.Trim());
+            }
+
+            _LogFile.WriteToLog(recordReturn);
         }
 
         //-------------------------------------------------------------------------------
@@ -261,36 +293,26 @@ namespace SharedClassLibrary
         {
             int stringPos = 0;
 
-            string id = record.Substring(stringPos, 3).Trim();
-            stringPos += 3;
-            string code = record.Substring(stringPos, 3).Trim();
-            stringPos += 3;
-            string name = record.Substring(stringPos, 17).Trim();
-            stringPos += 17;
-            string continent = record.Substring(stringPos, 11).Trim();
-            stringPos += 11;
-            string region = record.Substring(stringPos, 10).Trim();
-            stringPos += 10;
-            string surfaceArea = record.Substring(stringPos, 8).Trim();
-            stringPos += 8;
-            string yearOfIndep = record.Substring(stringPos, 5).Trim();
-            stringPos += 5;
-            string population = record.Substring(stringPos, 10).Trim();
-            stringPos += 10;
-            string lifeExpectancy = record.Substring(stringPos, 4).Trim();
+            string code = new string(_code);
+            string name = new string(_name);
+            string continent = new string(_continent);
+            string surfaceArea = Convert.ToString(_surfaceArea);
+            string yearOfIndep = Convert.ToString(_yearOfIndep);
+            string population = Convert.ToString(_population);
+            string lifeExpectancy = Convert.ToString(_lifeExpectancy);
+            string gnp = Convert.ToString(_gnp);
 
 
 
 
-            string t =  id.PadRight(4, ' ') +
-                        code.PadRight(5, ' ') +
+            string t =  code.PadRight(5, ' ') +
                         name.PadRight(20, ' ') +
                         continent.PadRight(18) +
-                        region.PadRight(15, ' ') +
                         surfaceArea.PadRight(15, ' ') +
                         yearOfIndep.PadRight(9, ' ') +
                         population.PadRight(13, ' ') +
-                        lifeExpectancy;
+                        lifeExpectancy.PadRight(8, ' ') +
+                        gnp;
 
             return t;
         }
@@ -304,15 +326,14 @@ namespace SharedClassLibrary
         private string FormatHeader()
         {
 
-            string t =  "ID".PadRight(4, ' ') +
-                        "CODE".PadRight(5, ' ') +
+            string t =  "CODE".PadRight(5, ' ') +
                         "NAME".PadRight(20, ' ') +
                         "CONTINENT".PadRight(18, ' ') +
-                        "REGION".PadRight(15, ' ') +
                         "AREA".PadRight(15, ' ') +
                         "INDEP".PadRight(9, ' ') +
                         "POPULATION".PadRight(13, ' ') +
-                        "L.EXP";
+                        "L.EXP".PadRight(8, ' ')+ 
+                        "GNP";
 
             return t;
         }
@@ -333,27 +354,29 @@ namespace SharedClassLibrary
         /// Reads one block of data from the file based on the RRN
         /// </summary>
         /// <param name="RRN">Record location</param>
-        /// <returns>A string based on its RRN location in file</returns>
-        private byte []ReadOneRecord(int RRN)
+        private void ReadOneRecord(int RRN)
         {
             int byteOffSet    = CalculateByteOffSet(RRN);
-
             fMainDataFile.Seek(byteOffSet, SeekOrigin.Begin);
 
-            return ReadOneRecord();
+            ReadOneRecord();
         }
 
         //----------------------------------------------------------------------------
         /// <summary>
         /// Reads one record at its current position in the file stream.
         /// </summary>
-        /// <returns>Array of the record</returns>
-        private byte[] ReadOneRecord()
+        private void ReadOneRecord()
         {
-            byte[] recordData = new byte[_sizeOfDataRec];
-            bMDataFileReader.Read(recordData, 0, recordData.Length);
-
-            return recordData;
+            _code        = bMDataFileReader.ReadChars(_code.Length);
+            _name        = bMDataFileReader.ReadChars(_name.Length);
+            _continent   = bMDataFileReader.ReadChars(_continent.Length);
+            _surfaceArea = bMDataFileReader.ReadInt32();
+            _yearOfIndep = bMDataFileReader.ReadInt16();
+            _population  = bMDataFileReader.ReadInt64();
+            _lifeExpectancy = bMDataFileReader.ReadSingle();
+            _gnp         = bMDataFileReader.ReadInt32();
+            _link        = bMDataFileReader.ReadInt16();
         }
 
         //--------------------------------------------------------------------------
