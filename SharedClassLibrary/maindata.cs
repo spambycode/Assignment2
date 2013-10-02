@@ -142,36 +142,63 @@ namespace SharedClassLibrary
             _LogFile.WriteToLog("**Error: Sorry Query By ID is no longer working");
         }
 
+
+        //-------------------------------------------------------------------------
         /// <summary>
         /// Finds the code related to the input.
         /// </summary>
         /// <param name="queryCode">Code that is stored in the file</param>
         public void QueryByCode(string queryCode)
         {
+            short recordsChecked = 1;
             string recordReturn = "";
             char[] Code = queryCode.Trim().ToCharArray();
-            byte[] record = { 0 };
 
-            if (ID > 0 && ID <= 300)
+            ReadOneRecord(HashFunction(Code));
+
+            if (_code[0] != '\0')
             {
-                ReadOneRecord(HashFunction(Code));
+                if (queryCode.ToUpper().CompareTo(new string(_code).ToUpper()) == 0)
+                {
+                    recordReturn = FormatRecord();
+                }
+                else 
+                {
+                    ReadCollisionRecord(_link);
+                    if (queryCode.ToUpper().CompareTo(new string(_code).ToUpper()) == 0)
+                    {
+                        recordReturn = FormatRecord();
+                    }
+                    else
+                    {
+                        recordReturn = string.Format("**ERROR: no country with code {0}", queryCode.Trim());
+                    }
 
-                if (record[0] != '\0')
-                {
-                    recordReturn = FormatRecord(Encoding.UTF8.GetString(record));
+                    ++recordsChecked;
+
                 }
-                else
-                {
-                    recordReturn = string.Format("**ERROR: no country with code {0}", queryCode.Trim());
-                }
+
             }
             else
             {
-                recordReturn = string.Format("**ERROR: no country with id {0}", queryCode.Trim());
+                recordReturn = string.Format("**ERROR: no country with code {0}", queryCode.Trim());
             }
+            
 
             _LogFile.WriteToLog(recordReturn);
+            _LogFile.WriteToLog("[" + Convert.ToString(recordsChecked) + "]");
         }
+
+        //-------------------------------------------------------------------------
+        /// <summary>
+        /// Delete a record by its code
+        /// </summary>
+        /// <param name="queryCode"></param>
+        public void DeleteByCode(string queryCode)
+        {
+
+        }
+
 
         //-------------------------------------------------------------------------------
         /// <summary>
@@ -289,10 +316,8 @@ namespace SharedClassLibrary
         /// </summary>
         /// <param name="record">record from main data</param>
         /// <returns>formatted string ready to be used</returns>
-        private string FormatRecord(string record)
+        private string FormatRecord()
         {
-            int stringPos = 0;
-
             string code = new string(_code);
             string name = new string(_name);
             string continent = new string(_continent);
@@ -379,6 +404,8 @@ namespace SharedClassLibrary
             _link        = bMDataFileReader.ReadInt16();
         }
 
+
+
         //--------------------------------------------------------------------------
         /// <summary>
         /// Writes one country to the file by the given byteOffSet
@@ -393,6 +420,27 @@ namespace SharedClassLibrary
             //Write the information to the maindata file;
             WriteRecord(bMDataFileWriter);
 
+        }
+
+        //--------------------------------------------------------------------------
+        /// <summary>
+        /// Reads a record in collision file
+        /// </summary>
+        /// <param name="linkRRN">The RRN place that the record is stored</param>
+        private void ReadCollisionRecord(short linkRRN)
+        {
+            int byteOffSet = CalculateByteOffSet(linkRRN);
+            fCollisionDataFile.Seek(byteOffSet, SeekOrigin.Begin);
+
+            _code        = bCollisionDataFileReader.ReadChars(_code.Length);
+            _name        = bCollisionDataFileReader.ReadChars(_name.Length);
+            _continent   = bCollisionDataFileReader.ReadChars(_continent.Length);
+            _surfaceArea = bCollisionDataFileReader.ReadInt32();
+            _yearOfIndep = bCollisionDataFileReader.ReadInt16();
+            _population  = bCollisionDataFileReader.ReadInt64();
+            _lifeExpectancy = bCollisionDataFileReader.ReadSingle();
+            _gnp         = bCollisionDataFileReader.ReadInt32();
+            _link        = bCollisionDataFileReader.ReadInt16();
         }
 
 
@@ -428,6 +476,7 @@ namespace SharedClassLibrary
             }
 
             _gnp            = Int32.Parse(RD.GNP);
+            _link = -1;
 
 
         }
@@ -506,7 +555,7 @@ namespace SharedClassLibrary
             bw.Write(_population);
             bw.Write(_lifeExpectancy);
             bw.Write(_gnp);
-            bw.Write(-1);
+            bw.Write(_link);
         }
     }
 }

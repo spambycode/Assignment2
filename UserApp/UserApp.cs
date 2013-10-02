@@ -46,6 +46,12 @@ namespace UserApp
 
                 switch(command.Substring(0, 2))
                 {
+                    case "QC":
+                        MD.QueryByCode(QueryData(command));
+                        break;
+                    case "DC":
+                        MD.DeleteByCode(QueryData(command));
+                        break;
                     case "QI":   
                         MD.QueryByID(QueryData(command));
                         break;
