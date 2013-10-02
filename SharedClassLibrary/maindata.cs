@@ -18,13 +18,14 @@ namespace SharedClassLibrary
         private BinaryWriter bMDataFileWriter;
         private BinaryReader bMDataFileReader;
         private BinaryWriter bCollisionDataFileWriter;
+        private BinaryReader bCollisionDataFileReader;
 
         private UserInterface _LogFile;                  //Log file Access
         private string mDataFileName;                        //Holds the file name of main data
         private string cDataFileName;
 
-        private short nHomeRec = 0;                    //Counts how many recorders
-        private short nCollRec = 0;
+        private short nHomeRec = 1;                    //Counts how many recorders
+        private short nCollRec = 1;
         private short MAX_N_HOME_LOC;
         private char[] collisionFileName;
 
@@ -49,7 +50,7 @@ namespace SharedClassLibrary
             _sizeOfHeaderRec = sizeof(short);
             _sizeOfDataRec   = + _code.Length + _name.Length + _continent.Length
                                + sizeof(int) +sizeof(short) + sizeof(long) + 
-                                 sizeof(float) + sizeof(int);
+                                 sizeof(float) + sizeof(int) + sizeof(short);
 
 
             //Open and create a new file
@@ -67,6 +68,7 @@ namespace SharedClassLibrary
 
             fCollisionDataFile = new FileStream(cDataFileName, FileMode.OpenOrCreate);
             bCollisionDataFileWriter = new BinaryWriter(fCollisionDataFile);
+            bCollisionDataFileReader = new BinaryReader(fCollisionDataFile);
             
          
             _LogFile.WriteToLog("Opened " + mDataFileName + " File");
@@ -87,19 +89,21 @@ namespace SharedClassLibrary
         public bool StoreOneCountry(RawData RD)
         {
 
-            InitializeFixLengthVaraibles(RD);
+            InitializeCustomVaraibles(RD);
 
-            int RRN = CalculateRRN(_code);
+            int RRN = HashFunction(_code);
             int byteOffSet = CalculateByteOffSet(RRN);
 
             if(RecordIsFilled(byteOffSet))
             {
-                return false;
+                CollisionHandling(byteOffSet);
+                ++nCollRec;
             }
 
 
-            ++nHomeRec; //increase amount of records
+           
             WriteOneCountry(byteOffSet);
+            ++nHomeRec; //increase amount of records
 
             return true;
 
@@ -191,7 +195,7 @@ namespace SharedClassLibrary
         /// </summary>
         /// <param name="id">Id to calculate the RRN of the document</param>
         /// <returns>The RRN of the main data file</returns>
-        private int CalculateRRN(char []Code)
+        private int HashFunction(char []Code)
         {
             int RRN = 0;
             byte[] asciiBytes = Encoding.ASCII.GetBytes(new string(Code).ToUpper());
@@ -209,29 +213,17 @@ namespace SharedClassLibrary
         /// <returns>If true file is already filled</returns>
         private bool RecordIsFilled(int byteOffSet)
         {
-            byte[] Data = new Byte[_sizeOfDataRec];   //Data being read from file
-            string inFileName = "";
-            string inFileId     = "";
+            byte data;
 
             fMainDataFile.Seek(byteOffSet, SeekOrigin.Begin);
-            fMainDataFile.Read(Data, 0, Data.Length);
+            data = bMDataFileReader.ReadByte();
 
-            if(Data[0] != '\0')  //If there is already data there in the file, a duplicate was found
+            if(data != '\0')  //If there is already data there in the file, a duplicate was found
             {
-
-                //Get the name and ID of the information found in the file
-                inFileName = Encoding.UTF8.GetString(Data)
-                                          .Substring( _code.Length, _name.Length).Trim();
-
-
-                //Write a nice little error log msg to the file.
-                _LogFile.WriteToLog("**Error: CODE " + new string(_code) +
-                                        " Not inserted (CODE " + inFileName + ")");
 
                 return true;
             }
             
-
             return false;
         }
 
@@ -372,20 +364,11 @@ namespace SharedClassLibrary
         private void WriteOneCountry(int byteOffSet)
         {
 
-            if(fMainDataFile.Length < byteOffSet)
-                fMainDataFile.SetLength(byteOffSet);
-
             //Move file pointer to new location
             fMainDataFile.Seek(byteOffSet, SeekOrigin.Begin);
 
             //Write the information to the maindata file;
-            bMDataFileWriter.Write(_code);
-            bMDataFileWriter.Write(_name);
-            bMDataFileWriter.Write(_continent);
-            bMDataFileWriter.Write(_surfaceArea);
-            bMDataFileWriter.Write(_yearOfIndep);
-            bMDataFileWriter.Write(_population);
-            bMDataFileWriter.Write(_lifeExpectancy);
+            WriteRecord(bMDataFileWriter);
 
         }
 
@@ -395,7 +378,7 @@ namespace SharedClassLibrary
         /// Initializes all the variables that require a fixed length
         /// </summary>
         /// <param name="RD">Class that holds strings at random lengths</param>
-        private void InitializeFixLengthVaraibles(RawData RD)
+        private void InitializeCustomVaraibles(RawData RD)
         {
             _code        = RD.CODE.PadLeft(_code.Length, ' ').ToCharArray(0, _code.Length);
             _name        = RD.NAME.PadRight(_name.Length, ' ').ToCharArray(0, _name.Length);
@@ -412,15 +395,95 @@ namespace SharedClassLibrary
             _population  = long.Parse(RD.POPULATION);
 
             //Check this (needs to be XX.X or X.XX or null)
-            if(RD.LIFEEXPECTANCY.ToUpper().CompareTo("NULL") == 0)
+            if (RD.LIFEEXPECTANCY.ToUpper().CompareTo("NULL") == 0)
             {
                 _lifeExpectancy = 0.0f;
             }
+            else
+            {
+                _lifeExpectancy = float.Parse(RD.LIFEEXPECTANCY);
+            }
 
-            _lifeExpectancy = float.Parse(RD.LIFEEXPECTANCY);
             _gnp            = Int32.Parse(RD.GNP);
 
 
+        }
+
+        //-----------------------------------------------------------------------
+        /// <summary>
+        /// Handles the collision data from main data file. And places new 
+        /// information in the collision file.
+        /// </summary>
+        /// <param name="byteOffSet"></param>
+        private int CollisionHandling(int MainDatabyteOffSet)
+        {
+
+            int collisionByteOffSet = CalculateByteOffSet(nCollRec);
+            byte record;
+            fCollisionDataFile.Seek(collisionByteOffSet, SeekOrigin.Begin);
+            record = bCollisionDataFileReader.ReadByte();
+
+            //Find empty RRN location
+            while(record != '\0')
+            {
+                collisionByteOffSet = CalculateByteOffSet(++nCollRec);
+                fCollisionDataFile.Seek(collisionByteOffSet, SeekOrigin.Begin);
+                record = bCollisionDataFileReader.ReadByte();
+            }
+
+            fCollisionDataFile.Seek(-1, SeekOrigin.Current);
+
+            WriteRecord(bCollisionDataFileWriter);
+
+            return ChangeMainDataHeaderPtr(MainDatabyteOffSet);
+            
+        }
+
+        //-----------------------------------------------------------------------
+        /// <summary>
+        /// Changes the header pointer in the data field, if data field is empty
+        /// </summary>
+        /// <param name="byteOffSet">Location of data</param>
+        /// <returns>Current pointed header record</returns>
+        private int ChangeMainDataHeaderPtr(int MainDatabyteOffSet)
+        {
+            int headerPtr = 0;
+
+            fMainDataFile.Seek(MainDatabyteOffSet + (_sizeOfDataRec - sizeof(short)), 
+                               SeekOrigin.Begin);
+
+            headerPtr = bMDataFileReader.ReadInt16();
+
+            //If header ptr is empty, write new location
+            if(headerPtr == -1)
+            {
+                fMainDataFile.Seek(MainDatabyteOffSet + (_sizeOfDataRec - sizeof(short)),
+                                   SeekOrigin.Begin);
+
+                bMDataFileWriter.Write(nCollRec);
+                return nCollRec;
+            }
+
+            return headerPtr;
+
+        }
+
+        //------------------------------------------------------------------------
+        /// <summary>
+        /// Writes All data to a file based on its Writer function in use
+        /// </summary>
+        /// <param name="bw">What file structure is being written to</param>
+        private void WriteRecord(BinaryWriter bw)
+        {
+            bw.Write(_code);
+            bw.Write(_name);
+            bw.Write(_continent);
+            bw.Write(_surfaceArea);
+            bw.Write(_yearOfIndep);
+            bw.Write(_population);
+            bw.Write(_lifeExpectancy);
+            bw.Write(_gnp);
+            bw.Write(-1);
         }
     }
 }
