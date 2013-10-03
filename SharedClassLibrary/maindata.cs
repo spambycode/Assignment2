@@ -150,7 +150,8 @@ namespace SharedClassLibrary
         /// <param name="queryCode">Code that is stored in the file</param>
         public void QueryByCode(string queryCode)
         {
-            short recordsChecked = 1;
+            int recordsChecked = 1;
+            bool collisionRecordFound = false;
             string recordReturn = "";
             char[] Code = queryCode.Trim().ToCharArray();
 
@@ -164,8 +165,9 @@ namespace SharedClassLibrary
                 }
                 else 
                 {
-                    ReadCollisionRecord(_link);
-                    if (queryCode.ToUpper().CompareTo(new string(_code).ToUpper()) == 0)
+                    collisionRecordFound = ReadCollisionRecord(queryCode, ref recordsChecked);
+
+                    if (collisionRecordFound)
                     {
                         recordReturn = FormatRecord();
                     }
@@ -173,8 +175,6 @@ namespace SharedClassLibrary
                     {
                         recordReturn = string.Format("**ERROR: no country with code {0}", queryCode.Trim());
                     }
-
-                    ++recordsChecked;
 
                 }
 
@@ -426,21 +426,38 @@ namespace SharedClassLibrary
         /// <summary>
         /// Reads a record in collision file
         /// </summary>
-        /// <param name="linkRRN">The RRN place that the record is stored</param>
-        private void ReadCollisionRecord(short linkRRN)
+        /// <param name="queryCode">Code that is being searched for</param>
+        /// <returns>Number of records checked</returns>
+        private bool ReadCollisionRecord(string queryCode, ref int recordChecked)
         {
-            int byteOffSet = CalculateByteOffSet(linkRRN);
-            fCollisionDataFile.Seek(byteOffSet, SeekOrigin.Begin);
+            bool recordFound = false;
 
-            _code        = bCollisionDataFileReader.ReadChars(_code.Length);
-            _name        = bCollisionDataFileReader.ReadChars(_name.Length);
-            _continent   = bCollisionDataFileReader.ReadChars(_continent.Length);
-            _surfaceArea = bCollisionDataFileReader.ReadInt32();
-            _yearOfIndep = bCollisionDataFileReader.ReadInt16();
-            _population  = bCollisionDataFileReader.ReadInt64();
-            _lifeExpectancy = bCollisionDataFileReader.ReadSingle();
-            _gnp         = bCollisionDataFileReader.ReadInt32();
-            _link        = bCollisionDataFileReader.ReadInt16();
+            if (_link != -1)
+            {
+                do
+                {
+                    int byteOffSet = CalculateByteOffSet(_link);
+                    fCollisionDataFile.Seek(byteOffSet, SeekOrigin.Begin);
+
+                    _code = bCollisionDataFileReader.ReadChars(_code.Length);
+                    _name = bCollisionDataFileReader.ReadChars(_name.Length);
+                    _continent = bCollisionDataFileReader.ReadChars(_continent.Length);
+                    _surfaceArea = bCollisionDataFileReader.ReadInt32();
+                    _yearOfIndep = bCollisionDataFileReader.ReadInt16();
+                    _population = bCollisionDataFileReader.ReadInt64();
+                    _lifeExpectancy = bCollisionDataFileReader.ReadSingle();
+                    _gnp = bCollisionDataFileReader.ReadInt32();
+                    _link = bCollisionDataFileReader.ReadInt16();
+
+                    if (queryCode.ToUpper().CompareTo(new string(_code).ToUpper()) == 0)
+                        recordFound = true;
+
+                    ++recordChecked;
+
+                } while (_code[0] != '\0' || _link != -1 || recordFound == false);
+            }
+
+            return recordFound;
         }
 
 
