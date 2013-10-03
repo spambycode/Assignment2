@@ -48,7 +48,7 @@ namespace SharedClassLibrary
         public MainData(UserInterface LogInterFace)
         {
             //Calculate sizes for RandomAccess byte offset
-            _sizeOfHeaderRec = sizeof(short);
+            _sizeOfHeaderRec = sizeof(short) + sizeof(short);
             _sizeOfDataRec   = + _code.Length + _name.Length + _continent.Length
                                + sizeof(int) +sizeof(short) + sizeof(long) + 
                                  sizeof(float) + sizeof(int) + sizeof(short);
@@ -95,16 +95,16 @@ namespace SharedClassLibrary
             int RRN = HashFunction(_code);
             int byteOffSet = CalculateByteOffSet(RRN);
 
-            if(RecordIsFilled(byteOffSet))
+            if (RecordIsFilled(byteOffSet))
             {
                 CollisionHandling(byteOffSet);
                 ++nCollRec;
             }
-
-
-           
-            WriteOneCountry(byteOffSet);
-            ++nHomeRec; //increase amount of records
+            else
+            {
+                WriteOneCountry(byteOffSet);
+                ++nHomeRec; //increase amount of records in main data
+            }
 
             return true;
 
@@ -308,6 +308,7 @@ namespace SharedClassLibrary
         {
             fMainDataFile.Seek(0, SeekOrigin.Begin);
             bMDataFileWriter.Write(nHomeRec);
+            bMDataFileWriter.Write(nCollRec);
         }
 
         //------------------------------------------------------------------------------
@@ -418,7 +419,7 @@ namespace SharedClassLibrary
             fMainDataFile.Seek(byteOffSet, SeekOrigin.Begin);
 
             //Write the information to the maindata file;
-            WriteRecord(bMDataFileWriter);
+            WriteRecord(bMDataFileWriter, -1);
 
         }
 
@@ -436,7 +437,7 @@ namespace SharedClassLibrary
             {
                 do
                 {
-                    int byteOffSet = CalculateByteOffSet(_link);
+                    int byteOffSet = CalculateByteOffSet(_link) - _sizeOfHeaderRec;
                     fCollisionDataFile.Seek(byteOffSet, SeekOrigin.Begin);
 
                     _code = bCollisionDataFileReader.ReadChars(_code.Length);
@@ -454,7 +455,7 @@ namespace SharedClassLibrary
 
                     ++recordChecked;
 
-                } while (_code[0] != '\0' || _link != -1 || recordFound == false);
+                } while (_link != -1 && recordFound == false);
             }
 
             return recordFound;
@@ -504,57 +505,22 @@ namespace SharedClassLibrary
         /// information in the collision file.
         /// </summary>
         /// <param name="byteOffSet"></param>
-        private int CollisionHandling(int MainDatabyteOffSet)
+        private void CollisionHandling(int MainDatabyteOffSet)
         {
 
-            int collisionByteOffSet = CalculateByteOffSet(nCollRec);
-            byte record;
+            short oldLink = -1;
+            int collisionByteOffSet = CalculateByteOffSet(nCollRec) - _sizeOfHeaderRec;
+
             fCollisionDataFile.Seek(collisionByteOffSet, SeekOrigin.Begin);
-            record = bCollisionDataFileReader.ReadByte();
 
-            //Find empty RRN location
-            while(record != '\0')
-            {
-                collisionByteOffSet = CalculateByteOffSet(++nCollRec);
-                fCollisionDataFile.Seek(collisionByteOffSet, SeekOrigin.Begin);
-                record = bCollisionDataFileReader.ReadByte();
-            }
-
-            fCollisionDataFile.Seek(-1, SeekOrigin.Current);
-
-            WriteRecord(bCollisionDataFileWriter);
-
-            return ChangeMainDataHeaderPtr(MainDatabyteOffSet);
+            //Save and replace link data
+            fMainDataFile.Seek(MainDatabyteOffSet+_sizeOfDataRec-sizeof(short), SeekOrigin.Begin);
+            oldLink = bMDataFileReader.ReadInt16();                    //Save old link
+            fMainDataFile.Seek(-sizeof(short), SeekOrigin.Current);
+            bMDataFileWriter.Write(nCollRec);                          //Place new link
             
-        }
-
-        //-----------------------------------------------------------------------
-        /// <summary>
-        /// Changes the header pointer in the data field, if data field is empty
-        /// </summary>
-        /// <param name="byteOffSet">Location of data</param>
-        /// <returns>Current pointed header record</returns>
-        private int ChangeMainDataHeaderPtr(int MainDatabyteOffSet)
-        {
-            int headerPtr = 0;
-
-            fMainDataFile.Seek(MainDatabyteOffSet + (_sizeOfDataRec - sizeof(short)), 
-                               SeekOrigin.Begin);
-
-            headerPtr = bMDataFileReader.ReadInt16();
-
-            //If header ptr is empty, write new location
-            if(headerPtr == -1)
-            {
-                fMainDataFile.Seek(MainDatabyteOffSet + (_sizeOfDataRec - sizeof(short)),
-                                   SeekOrigin.Begin);
-
-                bMDataFileWriter.Write(nCollRec);
-                return nCollRec;
-            }
-
-            return headerPtr;
-
+            WriteRecord(bCollisionDataFileWriter, oldLink);
+            
         }
 
         //------------------------------------------------------------------------
@@ -562,7 +528,7 @@ namespace SharedClassLibrary
         /// Writes All data to a file based on its Writer function in use
         /// </summary>
         /// <param name="bw">What file structure is being written to</param>
-        private void WriteRecord(BinaryWriter bw)
+        private void WriteRecord(BinaryWriter bw, short link)
         {
             bw.Write(_code);
             bw.Write(_name);
@@ -572,7 +538,7 @@ namespace SharedClassLibrary
             bw.Write(_population);
             bw.Write(_lifeExpectancy);
             bw.Write(_gnp);
-            bw.Write(_link);
+            bw.Write(link);
         }
     }
 }
