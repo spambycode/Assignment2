@@ -165,7 +165,7 @@ namespace SharedClassLibrary
                 }
                 else 
                 {
-                    collisionRecordFound = ReadCollisionRecord(queryCode, ref recordsChecked);
+                    SearchCollisionFile(queryCode, ref recordsChecked, ref collisionRecordFound);
 
                     if (collisionRecordFound)
                     {
@@ -196,7 +196,29 @@ namespace SharedClassLibrary
         /// <param name="queryCode"></param>
         public void DeleteByCode(string queryCode)
         {
+            int recordsChecked = 1;
+            bool collisionRecordFound = false;
+            string recordReturn = "";
+            char[] Code = queryCode.Trim().ToCharArray();
 
+            ReadOneRecord(HashFunction(Code));
+
+            if (_code[0] != '\0')
+            {
+                if (queryCode.ToUpper().CompareTo(new string(_code).ToUpper()) == 0)
+                {
+                    recordReturn = FormatRecord();
+                }
+                else
+                {
+                    int byteoffSet = SearchCollisionFile(queryCode, ref recordsChecked, ref collisionRecordFound);
+
+                    if(collisionRecordFound)
+                    {
+                        TomeStoneRecord(byteoffSet, recordsChecked, Code);  
+                    }
+                }
+            }
         }
 
 
@@ -405,7 +427,37 @@ namespace SharedClassLibrary
             _link        = bMDataFileReader.ReadInt16();
         }
 
+        //---------------------------------------------------------------------
+        /// <summary>
+        /// Reads a record stored in the collision file
+        /// </summary>
+        /// <param name="RRN">Place where record is kept</param>
+        /// <returns>Returns the byteoffset that was read</returns>
+        private int ReadOneCollisionRecord(int RRN)
+        {
+            int byteOffSet = CalculateByteOffSet(_link) - _sizeOfHeaderRec;
+            fCollisionDataFile.Seek(byteOffSet, SeekOrigin.Begin);
+            ReadOneCollisionRecord();
 
+            return byteOffSet;
+        }
+
+        //----------------------------------------------------------------------
+        /// <summary>
+        /// Reads a record from the collision file
+        /// </summary>
+        private void ReadOneCollisionRecord()
+        {
+            _code        = bCollisionDataFileReader.ReadChars(_code.Length);
+            _name        = bCollisionDataFileReader.ReadChars(_name.Length);
+            _continent   = bCollisionDataFileReader.ReadChars(_continent.Length);
+            _surfaceArea = bCollisionDataFileReader.ReadInt32();
+            _yearOfIndep = bCollisionDataFileReader.ReadInt16();
+            _population  = bCollisionDataFileReader.ReadInt64();
+            _lifeExpectancy = bCollisionDataFileReader.ReadSingle();
+            _gnp         = bCollisionDataFileReader.ReadInt32();
+            _link        = bCollisionDataFileReader.ReadInt16();
+        }
 
         //--------------------------------------------------------------------------
         /// <summary>
@@ -429,26 +481,15 @@ namespace SharedClassLibrary
         /// </summary>
         /// <param name="queryCode">Code that is being searched for</param>
         /// <returns>Number of records checked</returns>
-        private bool ReadCollisionRecord(string queryCode, ref int recordChecked)
+        private int SearchCollisionFile(string queryCode, ref int recordChecked, ref bool recordFound)
         {
-            bool recordFound = false;
+            int byteoffSet = 0;
 
             if (_link != -1)
             {
                 do
                 {
-                    int byteOffSet = CalculateByteOffSet(_link) - _sizeOfHeaderRec;
-                    fCollisionDataFile.Seek(byteOffSet, SeekOrigin.Begin);
-
-                    _code = bCollisionDataFileReader.ReadChars(_code.Length);
-                    _name = bCollisionDataFileReader.ReadChars(_name.Length);
-                    _continent = bCollisionDataFileReader.ReadChars(_continent.Length);
-                    _surfaceArea = bCollisionDataFileReader.ReadInt32();
-                    _yearOfIndep = bCollisionDataFileReader.ReadInt16();
-                    _population = bCollisionDataFileReader.ReadInt64();
-                    _lifeExpectancy = bCollisionDataFileReader.ReadSingle();
-                    _gnp = bCollisionDataFileReader.ReadInt32();
-                    _link = bCollisionDataFileReader.ReadInt16();
+                    byteoffSet = ReadOneCollisionRecord(_link);
 
                     if (queryCode.ToUpper().CompareTo(new string(_code).ToUpper()) == 0)
                         recordFound = true;
@@ -458,7 +499,7 @@ namespace SharedClassLibrary
                 } while (_link != -1 && recordFound == false);
             }
 
-            return recordFound;
+            return recordFound ? byteoffSet : 0;
         }
 
 
@@ -540,5 +581,62 @@ namespace SharedClassLibrary
             bw.Write(_gnp);
             bw.Write(link);
         }
+
+
+        private void TomeStoneRecord(int byteOffSet, int recordCount, char []Code)
+        {
+            short oldLink, newLink;
+            int mainFileByteOffSet = 0;
+
+
+            switch(recordCount)
+            {
+                case 1:  //Code was found in the main File
+                    fMainDataFile.Seek(byteOffSet, SeekOrigin.Begin);
+                    ReadOneRecord();
+                    fMainDataFile.Seek(byteOffSet, SeekOrigin.Begin);
+
+                    if(_link != -1)
+                    {
+                        ReadOneCollisionRecord(_link); //Store the frist record in collision 
+                    
+                        WriteRecord(bMDataFileWriter, _link); //Replace main record with collision
+                    }
+                    else
+                    {
+                        _code = new char[_code.Length];
+                        WriteRecord(bMDataFileWriter, _link); //TomeStone Code and replace record
+                    }
+                    break;
+                case 2:  //Code was found in the first link from main to collision file
+                    mainFileByteOffSet = CalculateByteOffSet(HashFunction(Code)) - sizeof(short);
+                    fMainDataFile.Seek(mainFileByteOffSet+_sizeOfDataRec-sizeof(short), SeekOrigin.Begin);
+                    fCollisionDataFile.Seek(byteOffSet+_sizeOfDataRec-sizeof(short), SeekOrigin.Begin);
+
+                    //Save Collisions data link.
+                    oldLink = bCollisionDataFileReader.ReadInt16();
+
+                    //Write Collisions link to maindata file
+                    bMDataFileWriter.Write(oldLink);
+
+                    fCollisionDataFile.Seek(byteOffSet, SeekOrigin.Begin);
+                    ReadOneCollisionRecord();
+                    fCollisionDataFile.Seek(byteOffSet, SeekOrigin.Begin);
+
+                    //Tombstone code and link
+                    _code = new char[_code.Length];
+                    WriteRecord(bCollisionDataFileWriter, -1);
+
+                    break;
+                default: //Code was found somewhere in the collision file (not first)
+
+                    fCollisionDataFile.Seek(byteOffSet + _sizeOfDataRec - sizeof(short), SeekOrigin.Begin);
+                    oldLink = bCollisionDataFileReader.ReadInt16();
+
+                    break;
+            }
+           
+        }
+
     }
 }
