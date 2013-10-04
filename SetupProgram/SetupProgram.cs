@@ -24,7 +24,7 @@ namespace SetupProgram
             }
             else
             {
-                fileNameSuffix = "Just26";
+                fileNameSuffix = "A2";
             }
 
             DeleteFile("Maindata.bin");

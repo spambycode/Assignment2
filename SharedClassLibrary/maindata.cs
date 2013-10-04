@@ -49,13 +49,13 @@ namespace SharedClassLibrary
         {
             //Calculate sizes for RandomAccess byte offset
             _sizeOfHeaderRec = sizeof(short) + sizeof(short);
-            _sizeOfDataRec   = + _code.Length + _name.Length + _continent.Length
+            _sizeOfDataRec   = _code.Length + _name.Length + _continent.Length
                                + sizeof(int) +sizeof(short) + sizeof(long) + 
                                  sizeof(float) + sizeof(int) + sizeof(short);
 
 
             //Open and create a new file
-            mDataFileName = "MainData.txt";
+            mDataFileName = "MainData.bin";
             cDataFileName = "MainDataCollision.bin";
             collisionFileName = cDataFileName.ToCharArray();
 
@@ -303,12 +303,12 @@ namespace SharedClassLibrary
         /// <returns>If true file is already filled</returns>
         private bool RecordIsFilled(int byteOffSet)
         {
-            byte data;
+            int data;
 
             fMainDataFile.Seek(byteOffSet, SeekOrigin.Begin);
-            data = bMDataFileReader.ReadByte();
-
-            if(data != '\0')  //If there is already data there in the file, a duplicate was found
+            data = fMainDataFile.ReadByte();
+            fMainDataFile.Seek(byteOffSet, SeekOrigin.Begin);
+            if(data != -1 && data != '\0')  //If there is already data there in the file, a duplicate was found
             {
 
                 return true;
@@ -327,8 +327,13 @@ namespace SharedClassLibrary
 
         private short ReadHeaderRecCount()
         {
-            fMainDataFile.Seek(0, SeekOrigin.Begin);
-            return bMDataFileReader.ReadInt16();
+            if (fMainDataFile.Length >= 2)
+            {
+                fMainDataFile.Seek(0, SeekOrigin.Begin);
+                return bMDataFileReader.ReadInt16();
+            }
+
+            return 0;
         }
 
         //----------------------------------------------------------------------------------
@@ -529,12 +534,14 @@ namespace SharedClassLibrary
             _surfaceArea = Int32.Parse(RD.SURFACEAREA);
 
 
-            if(RD.YEAROFINDEP.Contains("-"))
+            if (RD.YEAROFINDEP.ToUpper().CompareTo("NULL") == 0)
             {
-                RD.YEAROFINDEP = RD.YEAROFINDEP.Replace('-', '0');
+                _yearOfIndep = 0;
             }
-
-            _yearOfIndep = Int16.Parse(RD.YEAROFINDEP);
+            else
+            {
+                _yearOfIndep = Int16.Parse(RD.YEAROFINDEP.Replace('-', '0')); 
+            }
             _population  = long.Parse(RD.POPULATION);
 
             //Check this (needs to be XX.X or X.XX or null)
@@ -544,7 +551,7 @@ namespace SharedClassLibrary
             }
             else
             {
-                _lifeExpectancy = float.Parse(RD.LIFEEXPECTANCY);
+                _lifeExpectancy = float.Parse(string.Format("{0:N1}", Convert.ToDecimal(RD.LIFEEXPECTANCY)));
             }
 
             _gnp            = Int32.Parse(RD.GNP);
