@@ -39,6 +39,13 @@ namespace PrettyPrintUtility
           
         }
 
+        //---------------------------------------------------------------------------------------------
+        /// <summary>
+        /// Loop through and store all viable records into a array
+        /// </summary>
+        /// <param name="fileReader">Current binary reader for the file being accessed</param>
+        /// <param name="headerLength">Length (in bytes) of the header file</param>
+        /// <returns>An array of formatted records ready to be displayed</returns>
 
         private static string []ReadFile(BinaryReader fileReader, int headerLength)
         {
@@ -86,14 +93,18 @@ namespace PrettyPrintUtility
 
         }
 
-        private static void ReadCollisionFile()
-        {
 
-        }
-
+        //-----------------------------------------------------------------------------
+        /// <summary>
+        /// Close all files that are open
+        /// </summary>
         private static void FinishUp()
         {
+            bMainDataFileReader.Close();
             fMainDataFile.Close();
+
+            bCollisionDataFileReader.Close();
+            fCollisionDataFile.Close();
         }
 
 
@@ -113,7 +124,7 @@ namespace PrettyPrintUtility
                         "AREA".PadRight(15, ' ') +
                         "INDEP".PadRight(9, ' ') +
                         "POPULATION".PadRight(13, ' ') +
-                        "L.EXP".PadRight(12, ' ') +
+                        "L.EXP".PadRight(8, ' ') +
                         "GNP";
         }
 
@@ -135,7 +146,10 @@ namespace PrettyPrintUtility
             }
 
             logFile.WriteLine("End of MainData.bin");
+            logFile.WriteLine();
             logFile.WriteLine("Start of MainDataCollision.bin");
+            
+            //logFile.Write("Start of MainDataCollision.bin");
 
             logFile.WriteLine(FormatHeader());
 
