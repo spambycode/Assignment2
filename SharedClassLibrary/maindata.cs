@@ -151,7 +151,6 @@ namespace SharedClassLibrary
         public void QueryByCode(string queryCode)
         {
             int recordsChecked = 1;
-            bool collisionRecordFound = false;
             string recordReturn = "";
             char[] Code = queryCode.Trim().ToCharArray();
 
@@ -165,15 +164,15 @@ namespace SharedClassLibrary
                 }
                 else 
                 {
-                    SearchCollisionFile(queryCode, ref recordsChecked, ref collisionRecordFound);
+                    SearchCollisionFile(queryCode, ref recordsChecked);
 
-                    if (collisionRecordFound)
+                    if (SearchCollisionFile(queryCode, ref recordsChecked) != null)
                     {
                         recordReturn = FormatRecord();
                     }
                     else
                     {
-                        recordReturn = string.Format("**ERROR: no country with code {0}", queryCode.Trim());
+                        recordReturn = string.Format("**ERROR(QUERY): no country with code {0}", queryCode.Trim());
                     }
 
                 }
@@ -181,7 +180,7 @@ namespace SharedClassLibrary
             }
             else
             {
-                recordReturn = string.Format("**ERROR: no country with code {0}", queryCode.Trim());
+                recordReturn = string.Format("**ERROR(QUERY): no country with code {0}", queryCode.Trim());
             }
             
 
@@ -193,11 +192,10 @@ namespace SharedClassLibrary
         /// <summary>
         /// Delete a record by its code
         /// </summary>
-        /// <param name="queryCode"></param>
+        /// <param name="queryCode">Country code</param>
         public void DeleteByCode(string queryCode)
         {
             int recordsChecked = 1;
-            bool collisionRecordFound = false;
             string recordReturn = "";
             char[] Code = queryCode.Trim().ToCharArray();
 
@@ -207,18 +205,29 @@ namespace SharedClassLibrary
             {
                 if (queryCode.ToUpper().CompareTo(new string(_code).ToUpper()) == 0)
                 {
-                    recordReturn = FormatRecord();
+                    //found match in maindata
                 }
                 else
                 {
-                    int byteoffSet = SearchCollisionFile(queryCode, ref recordsChecked, ref collisionRecordFound);
+                    int []byteoffSet = SearchCollisionFile(queryCode, ref recordsChecked);
 
-                    if(collisionRecordFound)
+                    if(byteoffSet.Length > 0)
                     {
                         TomeStoneRecord(byteoffSet, recordsChecked, Code);  
                     }
+                    else
+                    {
+                        recordReturn = string.Format("**ERROR(DELETE): no country with code {0}", queryCode.Trim());
+                    }
                 }
             }
+            else
+            {
+                recordReturn = string.Format("**ERROR(DELETE): no country with code {0}", queryCode.Trim());
+            }
+
+            _LogFile.WriteToLog(recordReturn);
+            _LogFile.WriteToLog("[" + Convert.ToString(recordsChecked) + "]");
         }
 
 
@@ -448,6 +457,7 @@ namespace SharedClassLibrary
         /// </summary>
         private void ReadOneCollisionRecord()
         {
+            long currentPosition = fCollisionDataFile.Position;
             _code        = bCollisionDataFileReader.ReadChars(_code.Length);
             _name        = bCollisionDataFileReader.ReadChars(_name.Length);
             _continent   = bCollisionDataFileReader.ReadChars(_continent.Length);
@@ -457,6 +467,8 @@ namespace SharedClassLibrary
             _lifeExpectancy = bCollisionDataFileReader.ReadSingle();
             _gnp         = bCollisionDataFileReader.ReadInt32();
             _link        = bCollisionDataFileReader.ReadInt16();
+
+            fCollisionDataFile.Seek(currentPosition, SeekOrigin.Begin);
         }
 
         //--------------------------------------------------------------------------
@@ -480,16 +492,17 @@ namespace SharedClassLibrary
         /// Reads a record in collision file
         /// </summary>
         /// <param name="queryCode">Code that is being searched for</param>
-        /// <returns>Number of records checked</returns>
-        private int SearchCollisionFile(string queryCode, ref int recordChecked, ref bool recordFound)
+        /// <returns>Array of byteoffset that was searched</returns>
+        private int []SearchCollisionFile(string queryCode, ref int recordChecked)
         {
-            int byteoffSet = 0;
+            List<int> byteOffSetList = new List<int>();
+            bool recordFound = false;
 
             if (_link != -1)
             {
                 do
                 {
-                    byteoffSet = ReadOneCollisionRecord(_link);
+                    byteOffSetList.Add(ReadOneCollisionRecord(_link));
 
                     if (queryCode.ToUpper().CompareTo(new string(_code).ToUpper()) == 0)
                         recordFound = true;
@@ -499,7 +512,7 @@ namespace SharedClassLibrary
                 } while (_link != -1 && recordFound == false);
             }
 
-            return recordFound ? byteoffSet : 0;
+            return recordFound ? byteOffSetList.ToArray() : null;
         }
 
 
@@ -582,19 +595,26 @@ namespace SharedClassLibrary
             bw.Write(link);
         }
 
+        //------------------------------------------------------------------------------------
+        /// <summary>
+        /// Deletes a record based on its location it was found
+        /// </summary>
+        /// <param name="byteOffSet">A trail of offsets that lead back to start</param>
+        /// <param name="recordCount">How many where counted</param>
+        /// <param name="Code">Actual query code searched</param>
 
-        private void TomeStoneRecord(int byteOffSet, int recordCount, char []Code)
+        private void TomeStoneRecord(int []byteOffSet, int recordCount, char []Code)
         {
-            short oldLink, newLink;
+            short oldLink;
             int mainFileByteOffSet = 0;
 
 
             switch(recordCount)
             {
                 case 1:  //Code was found in the main File
-                    fMainDataFile.Seek(byteOffSet, SeekOrigin.Begin);
+                    fMainDataFile.Seek(byteOffSet[0], SeekOrigin.Begin);
                     ReadOneRecord();
-                    fMainDataFile.Seek(byteOffSet, SeekOrigin.Begin);
+                    fMainDataFile.Seek(byteOffSet[0], SeekOrigin.Begin);
 
                     if(_link != -1)
                     {
@@ -609,9 +629,12 @@ namespace SharedClassLibrary
                     }
                     break;
                 case 2:  //Code was found in the first link from main to collision file
-                    mainFileByteOffSet = CalculateByteOffSet(HashFunction(Code)) - sizeof(short);
-                    fMainDataFile.Seek(mainFileByteOffSet+_sizeOfDataRec-sizeof(short), SeekOrigin.Begin);
-                    fCollisionDataFile.Seek(byteOffSet+_sizeOfDataRec-sizeof(short), SeekOrigin.Begin);
+                    mainFileByteOffSet = CalculateByteOffSet(HashFunction(Code));
+
+                    fMainDataFile.Seek(mainFileByteOffSet
+                                             +_sizeOfDataRec-sizeof(short), SeekOrigin.Begin);
+                    fCollisionDataFile.Seek(byteOffSet[byteOffSet.Length] 
+                                             + _sizeOfDataRec - sizeof(short), SeekOrigin.Begin);
 
                     //Save Collisions data link.
                     oldLink = bCollisionDataFileReader.ReadInt16();
@@ -619,9 +642,8 @@ namespace SharedClassLibrary
                     //Write Collisions link to maindata file
                     bMDataFileWriter.Write(oldLink);
 
-                    fCollisionDataFile.Seek(byteOffSet, SeekOrigin.Begin);
+                    fCollisionDataFile.Seek(byteOffSet[byteOffSet.Length], SeekOrigin.Begin);
                     ReadOneCollisionRecord();
-                    fCollisionDataFile.Seek(byteOffSet, SeekOrigin.Begin);
 
                     //Tombstone code and link
                     _code = new char[_code.Length];
@@ -630,8 +652,24 @@ namespace SharedClassLibrary
                     break;
                 default: //Code was found somewhere in the collision file (not first)
 
-                    fCollisionDataFile.Seek(byteOffSet + _sizeOfDataRec - sizeof(short), SeekOrigin.Begin);
-                    oldLink = bCollisionDataFileReader.ReadInt16();
+                    //Go to the record that needs to be deleted
+                    fCollisionDataFile.Seek(byteOffSet[byteOffSet.Length]
+                                             + _sizeOfDataRec - sizeof(short), SeekOrigin.Begin);
+
+                    //Read record into memory (including its important link RRN)
+                    ReadOneCollisionRecord();
+
+                    //Tombstone code
+                    _code = new char[_code.Length];
+                    WriteRecord(bCollisionDataFileWriter, -1); //Eliminate record
+
+                    //Go to the record that linked to the one that needed to be deleted.
+                    fCollisionDataFile.Seek(byteOffSet[byteOffSet.Length-1]
+                                             + _sizeOfDataRec - sizeof(short), SeekOrigin.Begin);
+
+                    //Replace its RRN with the one that was deleted
+                    bCollisionDataFileWriter.Write(_link);
+
 
                     break;
             }
