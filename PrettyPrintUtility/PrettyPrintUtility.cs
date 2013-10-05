@@ -1,5 +1,14 @@
 ﻿/* PROJECT:  Asign 2 (C#)            PROGRAM: PrettyPrint (AKA ShowFilesUtility)
- * AUTHOR: George Karaszi   
+ * AUTHOR: George Karaszi 10-4-2013
+ * FILE ACCESSED:
+ *          (INPUT) MainData.bin
+ *          (INPUT) MainDataCollisions.bin
+ *          (OUTPUT) log.txt
+ *          
+ * USEAGE: To access and showcase the data stored within binaray files. 
+ *         Quick run of the mill looping structure that will loops till 
+ *         the end of the file, collecting information and displaying it 
+ *         in a formatted matter.
  *******************************************************************************/
 
 using System;
@@ -16,8 +25,13 @@ namespace PrettyPrintUtility
         static BinaryReader bMainDataFileReader;
         static BinaryReader bCollisionDataFileReader;
         static int _sizeOfHeaderRec = sizeof(short)*2;
-        static int _sizeOfDataRec = 3 + 17 + 12 + sizeof(int) +sizeof(short) + sizeof(long) + 
-                                    sizeof(float) + sizeof(int) + sizeof(short);
+        static int _sizeOfDataRec = 3 + 17 + 12 + sizeof(int) +
+                                    sizeof(short) + sizeof(long) + 
+                                    sizeof(float) + sizeof(int) + 
+                                    sizeof(short);
+
+        static short nCol; //Number of collisions.
+        static short nRec; //Number of records.
 
 
         public static void Main(string[] args)
@@ -25,14 +39,15 @@ namespace PrettyPrintUtility
 
             fMainDataFile = new FileStream("MainData.bin", FileMode.Open);
             bMainDataFileReader = new BinaryReader(fMainDataFile);
+            nRec = bMainDataFileReader.ReadInt16();
+            nCol = bMainDataFileReader.ReadInt16();
+
 
             fCollisionDataFile = new FileStream("MainDataCollision.bin", FileMode.Open);
             bCollisionDataFileReader = new BinaryReader(fCollisionDataFile);
 
             string[] MainRecordList      = ReadFile(bMainDataFileReader, _sizeOfHeaderRec);
-
-            string[] CollisionRecordList = ReadFile(bCollisionDataFileReader,
-                                                    0);
+            string[] CollisionRecordList = ReadFile(bCollisionDataFileReader,0);
 
             PrintResults(MainRecordList, CollisionRecordList);
             FinishUp();
@@ -57,34 +72,45 @@ namespace PrettyPrintUtility
             long population;                       //Total population of the country
             float lifeExpectancy;                  //The average time someone is alive in the country
             int gnp;                               //Gross national product
+            short link;
+            int RRN = 0;
+            string formatRecord;
             List<string> RecordCollection = new List<string>(); //List of formatted record strings
 
-
-            for (long pos = headerLength; pos < fileReader.BaseStream.Length; pos += _sizeOfDataRec)
+            for (long pos = headerLength; pos < fileReader.BaseStream.Length; pos += _sizeOfDataRec, RRN++)
             {
                 fileReader.BaseStream.Seek(pos, SeekOrigin.Begin);
 
                 code = fileReader.ReadChars(3);
 
                 if (code[0] == '\0')
-                    continue;
+                {
+                    formatRecord = "[" + Convert.ToString(RRN).PadLeft(3, '0') + "]".PadRight(2) + "Empty";
+                }
+                else
+                {
 
-                name           = fileReader.ReadChars(17);
-                continent      = fileReader.ReadChars(12);
-                surfaceArea    = fileReader.ReadInt32();
-                yearOfIndep    = fileReader.ReadInt16();
-                population     = fileReader.ReadInt64();
-                lifeExpectancy = fileReader.ReadSingle();
-                gnp            = fileReader.ReadInt32();
+                    name = fileReader.ReadChars(17);
+                    continent = fileReader.ReadChars(12);
+                    surfaceArea = fileReader.ReadInt32();
+                    yearOfIndep = fileReader.ReadInt16();
+                    population = fileReader.ReadInt64();
+                    lifeExpectancy = fileReader.ReadSingle();
+                    gnp = fileReader.ReadInt32();
+                    link = fileReader.ReadInt16();
 
-                string formatRecord = new string(code).PadRight(5, ' ') +
-                                      new string(name).PadRight(20, ' ') +
-                                      new string(continent).PadRight(18) +
-                                      Convert.ToString(surfaceArea).PadRight(15, ' ') +
-                                      Convert.ToString(yearOfIndep).PadRight(9, ' ') +
-                                      Convert.ToString(population).PadRight(13, ' ') +
-                                      Convert.ToString(lifeExpectancy).PadRight(8, ' ') +
-                                      Convert.ToString(gnp);
+               
+                    formatRecord =  "[" + Convert.ToString(RRN).PadLeft(3, '0') + "]".PadRight(2) +
+                                    new string(code).PadRight(6) +
+                                    new string(name).PadRight(18) +
+                                    new string(continent).PadRight(12) +
+                                    string.Format("{0:#,###,###.##}", surfaceArea).PadLeft(10) +
+                                    Convert.ToString(yearOfIndep).PadLeft(6).PadRight(7) +
+                                    string.Format("{0:#,###,###,###}", population).PadLeft(13).PadRight(12) +
+                                    string.Format("{0:0.#}", lifeExpectancy).PadRight(1).PadLeft(5) +
+                                    string.Format("{0:#,###,###,###}", gnp).PadLeft(10) +
+                                    Convert.ToString(link).PadLeft(5);
+                }
 
                 RecordCollection.Add(formatRecord);
             }
@@ -117,15 +143,16 @@ namespace PrettyPrintUtility
         private static string FormatHeader()
         {
 
-            return      
-                       "CODE".PadRight(5, ' ') +
-                        "NAME".PadRight(20, ' ') +
-                        "CONTINENT".PadRight(18, ' ') +
-                        "AREA".PadRight(15, ' ') +
-                        "INDEP".PadRight(9, ' ') +
-                        "POPULATION".PadRight(13, ' ') +
-                        "L.EXP".PadRight(8, ' ') +
-                        "GNP";
+            return "[RRN]".PadRight(6) + 
+                   "CODE".PadRight(6) + 
+                   "NAME".PadRight(18, '-') + 
+                   "CONTINENT".PadRight(12, '-') +
+                   "AREA".PadLeft(7, '-').PadRight(10, '-') + 
+                   "INDEP".PadRight(6).PadLeft(7) + 
+                   "POPULATION".PadLeft(12, '-').PadRight(13, '-') + 
+                   "L.EX".PadRight(5).PadLeft(6) + 
+                   "GNP".PadLeft(6, '-').PadRight(9, '-') + 
+                   "LINK".PadLeft(5);   
         }
 
         //------------------------------------------------------------------------------
@@ -135,34 +162,34 @@ namespace PrettyPrintUtility
         private static void PrintResults(string[] MainDataList, string []CollisionDataList)
         {
             StreamWriter logFile = new StreamWriter("Log.txt", true);
+            string header = FormatHeader();
 
             logFile.WriteLine("\n***************Pretty Print Start***************\n");
-            logFile.WriteLine("Start of MainData.bin");
-            logFile.WriteLine(FormatHeader());
-
+            logFile.WriteLine("MAIN DATA - HOME AREA".PadRight(header.Length + 1, '*'));
+            logFile.WriteLine(header);
+       
             foreach (string s in MainDataList)
             {
                 logFile.WriteLine(s);
             }
 
-            logFile.WriteLine("End of MainData.bin");
+            logFile.WriteLine("End".PadRight(header.Length + 1, '*'));
             logFile.WriteLine();
-            logFile.WriteLine("Start of MainDataCollision.bin");
-            
-            //logFile.Write("Start of MainDataCollision.bin");
-
+            logFile.WriteLine();
+            logFile.WriteLine("MAIN DATA - COLLISION AREA".PadRight(header.Length + 1, '*'));
             logFile.WriteLine(FormatHeader());
 
             foreach(string s in CollisionDataList)
             {
                 logFile.WriteLine(s);
             }
-            logFile.WriteLine("End of MainDataCollision.bin");
-
+            logFile.WriteLine("End".PadRight(header.Length + 1, '*'));
+            logFile.WriteLine();
+            logFile.WriteLine();
+            logFile.WriteLine("#Rec in Home Area: {0},   #Rec in Collision Area: {1}", nRec, nCol);
             logFile.WriteLine("\n**********End Of Pretty Print Utility**********\n");
 
             logFile.Close();
-
         }
 
     }

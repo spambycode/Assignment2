@@ -344,7 +344,7 @@ namespace SharedClassLibrary
         {
             fMainDataFile.Seek(0, SeekOrigin.Begin);
             bMDataFileWriter.Write(nHomeRec);
-            bMDataFileWriter.Write(nCollRec);
+            bMDataFileWriter.Write(nCollRec-1);
         }
 
         //------------------------------------------------------------------------------
