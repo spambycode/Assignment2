@@ -1,4 +1,4 @@
-﻿/* PROJECT:  Asign 1 (C#)            PROGRAM: RawData class
+﻿/* PROJECT:  Asign 2 (C#)            PROGRAM: RawData class
  * AUTHOR: George Karaszi   
  *******************************************************************************/
 

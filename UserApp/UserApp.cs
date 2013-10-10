@@ -1,4 +1,4 @@
-﻿/* PROJECT:  Asign 1 (C#)            PROGRAM: UserApp
+﻿/* PROJECT:  Asign 2 (C#)            PROGRAM: UserApp
  * AUTHOR: George Karaszi   
  *******************************************************************************/
 

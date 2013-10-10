@@ -1,4 +1,4 @@
-﻿/* PROJECT: Asign 1 (C#)         CLASS: UserInterface
+﻿/* PROJECT: Asign 2 (C#)         CLASS: UserInterface
  * AUTHOR:George Karaszi
  * FILES ACCESSED: TransData*.txt and log.txt
  * DESCRIPTION: Opens and writes to log file. Opens and processes transdata

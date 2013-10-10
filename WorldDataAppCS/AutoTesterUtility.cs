@@ -1,4 +1,4 @@
-﻿/* PROJECT:  Asign 1 (C#)            PROGRAM: AutoTesterUtility
+﻿/* PROJECT:  Asign 2 (C#)            PROGRAM: AutoTesterUtility
  * AUTHOR: George Karaszi   
  *******************************************************************************/
 

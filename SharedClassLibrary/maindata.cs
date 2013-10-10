@@ -2,7 +2,7 @@
  * AUTHOR: George Karaszi 
  * 
  * Function TombStone
- *          -Deletes Records in a 3 case senioro
+ *          -Deletes Records in a 3 case scenario
  *          1)Record is in MainData.Bin only
  *          2)Record is in the collision file's 1st position
  *          3)Record is some where in the collision file but not first positions
