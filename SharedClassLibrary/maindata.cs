@@ -1,5 +1,21 @@
-﻿/* PROJECT:  Asign 1 (C#)            PROGRAM: MainData class
- * AUTHOR: George Karaszi   
+﻿/* PROJECT:  Asign 2 (C#)            PROGRAM: MainData class
+ * AUTHOR: George Karaszi 
+ * 
+ * Function TombStone
+ *          -Deletes Records in a 3 case senioro
+ *          1)Record is in MainData.Bin only
+ *          2)Record is in the collision file's 1st position
+ *          3)Record is some where in the collision file but not first positions
+ *          
+ *          1)Delete record and replace it with its link record. 
+ *            Then delete link's record in collision. (Sub From nCol count)
+ *            If No link, just delete record (Sub from MainRec count)
+ *            
+ *          2)Copy record's link, replace main data's old link copied link.
+ *            Delete collision record. (Sub from nCol count)
+ *            
+ *          3)Copy records link, replace previous searched collision's
+ *            link with the one being deleted. (Sub from nCol count)
  *******************************************************************************/
 
 using System;
@@ -77,7 +93,7 @@ namespace SharedClassLibrary
             MAX_N_HOME_LOC = 20;
 
             //Get total records in file (Default is 0)
-            nHomeRec = ReadHeaderRecCount();
+            ReadHeaderRecCount();
         }
 
         //**************************** PUBLIC SERVICE METHODS **********************
@@ -118,7 +134,7 @@ namespace SharedClassLibrary
         /// </summary>
         public void FinishUp()
         {
-            WriteHeaderRec();
+           WriteHeaderRec();
             bMDataFileReader.Close();
             bMDataFileWriter.Close();
             fMainDataFile.Close();
@@ -164,7 +180,7 @@ namespace SharedClassLibrary
                 }
                 else 
                 {
-                    SearchCollisionFile(queryCode, ref recordsChecked);
+                    //SearchCollisionFile(queryCode, ref recordsChecked);
 
                     if (SearchCollisionFile(queryCode, ref recordsChecked) != null)
                     {
@@ -185,7 +201,7 @@ namespace SharedClassLibrary
             
 
             _LogFile.WriteToLog(recordReturn);
-            _LogFile.WriteToLog("[" + Convert.ToString(recordsChecked) + "]");
+            _LogFile.WriteToLog("Searched " + "[" + Convert.ToString(recordsChecked) + "]  Records");
         }
 
         //-------------------------------------------------------------------------
@@ -198,6 +214,8 @@ namespace SharedClassLibrary
             int recordsChecked = 1;
             string recordReturn = "";
             char[] Code = queryCode.Trim().ToCharArray();
+            int byteOffSetMainFile = 0;
+
 
             ReadOneRecord(HashFunction(Code));
 
@@ -205,13 +223,14 @@ namespace SharedClassLibrary
             {
                 if (queryCode.ToUpper().CompareTo(new string(_code).ToUpper()) == 0)
                 {
-                    //found match in maindata
+                    byteOffSetMainFile = CalculateByteOffSet(HashFunction(Code));
+                    TomeStoneRecord(new int[] {byteOffSetMainFile}, recordsChecked, Code);
                 }
                 else
                 {
                     int []byteoffSet = SearchCollisionFile(queryCode, ref recordsChecked);
 
-                    if(byteoffSet.Length > 0)
+                    if(byteoffSet != null)
                     {
                         TomeStoneRecord(byteoffSet, recordsChecked, Code);  
                     }
@@ -261,7 +280,7 @@ namespace SharedClassLibrary
         /// <param name="record">A string with CSV style record</param>
         public void InsertRecord(string record)
         {
-            _LogFile.WriteToLog("*IN: Is not operational at this time");
+            _LogFile.WriteToLog("**ERROR(INSERT): Is not operational at this time");
 
         }
 
@@ -275,6 +294,9 @@ namespace SharedClassLibrary
         /// <returns>offset to file positions</returns>
         private int CalculateByteOffSet(int RRN)
         {
+            if (RRN == 0)
+                RRN = 1;
+
             return _sizeOfHeaderRec + ((RRN - 1) * _sizeOfDataRec);
         }
 
@@ -327,10 +349,11 @@ namespace SharedClassLibrary
 
         private short ReadHeaderRecCount()
         {
-            if (fMainDataFile.Length >= 2)
+            if (fMainDataFile.Length >= 4)
             {
                 fMainDataFile.Seek(0, SeekOrigin.Begin);
-                return bMDataFileReader.ReadInt16();
+                nHomeRec = bMDataFileReader.ReadInt16();
+                nCollRec = bMDataFileReader.ReadInt16();
             }
 
             return 0;
@@ -344,7 +367,7 @@ namespace SharedClassLibrary
         {
             fMainDataFile.Seek(0, SeekOrigin.Begin);
             bMDataFileWriter.Write(nHomeRec);
-            bMDataFileWriter.Write(nCollRec-1);
+            bMDataFileWriter.Write(nCollRec);
         }
 
         //------------------------------------------------------------------------------
@@ -355,28 +378,16 @@ namespace SharedClassLibrary
         /// <returns>formatted string ready to be used</returns>
         private string FormatRecord()
         {
-            string code = new string(_code);
-            string name = new string(_name);
-            string continent = new string(_continent);
-            string surfaceArea = Convert.ToString(_surfaceArea);
-            string yearOfIndep = Convert.ToString(_yearOfIndep);
-            string population = Convert.ToString(_population);
-            string lifeExpectancy = Convert.ToString(_lifeExpectancy);
-            string gnp = Convert.ToString(_gnp);
 
-
-
-
-            string t =  code.PadRight(5, ' ') +
-                        name.PadRight(20, ' ') +
-                        continent.PadRight(18) +
-                        surfaceArea.PadRight(15, ' ') +
-                        yearOfIndep.PadRight(9, ' ') +
-                        population.PadRight(13, ' ') +
-                        lifeExpectancy.PadRight(8, ' ') +
-                        gnp;
-
-            return t;
+            return new string(_code).PadRight(6) +
+                   new string(_name).PadRight(18) +
+                   new string(_continent).PadRight(12) +
+                   string.Format("{0:#,###,###.##}", _surfaceArea).PadLeft(10) +
+                   Convert.ToString(_yearOfIndep).PadLeft(6).PadRight(7) +
+                   string.Format("{0:#,###,###,###}", _population).PadLeft(13).PadRight(12) +
+                   string.Format("{0:0.0#}", _lifeExpectancy).PadRight(1).PadLeft(5) +
+                   string.Format("{0:#,###,###,###}", _gnp).PadLeft(10) +
+                   Convert.ToString(_link).PadLeft(5);
         }
 
         //----------------------------------------------------------------------------
@@ -421,7 +432,10 @@ namespace SharedClassLibrary
             int byteOffSet    = CalculateByteOffSet(RRN);
             fMainDataFile.Seek(byteOffSet, SeekOrigin.Begin);
 
-            ReadOneRecord();
+            if(fMainDataFile.Length < (byteOffSet + _sizeOfDataRec))
+                _code = new char[] {'\0', '\0', '\0'};
+            else
+                ReadOneRecord();
         }
 
         //----------------------------------------------------------------------------
@@ -625,14 +639,21 @@ namespace SharedClassLibrary
 
                     if(_link != -1)
                     {
-                        ReadOneCollisionRecord(_link); //Store the frist record in collision 
-                    
+                        ReadOneCollisionRecord(_link); //Store the first record in collision 
                         WriteRecord(bMDataFileWriter, _link); //Replace main record with collision
+
+                        _code[0] = '\0';
+                        WriteRecord(bCollisionDataFileWriter, -1); //Tome stone collision Record that was replaced in main
+
+                        nCollRec--;
                     }
                     else
                     {
-                        _code = new char[_code.Length];
+                        //Tomb stone just the main data record.
+                        _code[0] = '\0';
                         WriteRecord(bMDataFileWriter, _link); //TomeStone Code and replace record
+
+                        nHomeRec--;
                     }
                     break;
                 case 2:  //Code was found in the first link from main to collision file
@@ -653,30 +674,32 @@ namespace SharedClassLibrary
                     ReadOneCollisionRecord();
 
                     //Tombstone code and link
-                    _code = new char[_code.Length];
+                    _code[0] = '\0';
                     WriteRecord(bCollisionDataFileWriter, -1);
+
+                    nCollRec--;
 
                     break;
                 default: //Code was found somewhere in the collision file (not first)
 
                     //Go to the record that needs to be deleted
-                    fCollisionDataFile.Seek(byteOffSet[byteOffSet.Length]
-                                             + _sizeOfDataRec - sizeof(short), SeekOrigin.Begin);
+                    fCollisionDataFile.Seek(byteOffSet[byteOffSet.Length-1], SeekOrigin.Begin);
 
                     //Read record into memory (including its important link RRN)
                     ReadOneCollisionRecord();
 
                     //Tombstone code
-                    _code = new char[_code.Length];
+                    _code[0] = '\0';
                     WriteRecord(bCollisionDataFileWriter, -1); //Eliminate record
 
                     //Go to the record that linked to the one that needed to be deleted.
-                    fCollisionDataFile.Seek(byteOffSet[byteOffSet.Length-1]
-                                             + _sizeOfDataRec - sizeof(short), SeekOrigin.Begin);
+                    fCollisionDataFile.Seek(byteOffSet[byteOffSet.Length-2] + 
+                                                    _sizeOfDataRec - sizeof(short), SeekOrigin.Begin);
 
                     //Replace its RRN with the one that was deleted
                     bCollisionDataFileWriter.Write(_link);
 
+                    nCollRec--;
 
                     break;
             }

@@ -24,7 +24,7 @@ namespace SetupProgram
             }
             else
             {
-                fileNameSuffix = "A2";
+                fileNameSuffix = "";
             }
 
             DeleteFile("Maindata.bin");
@@ -53,8 +53,8 @@ namespace SetupProgram
                 RecordCount++;
             }
 
-            UI.WriteToLog(string.Format("Setup complete: {0} Total records processed ({1} Successes and {2} Errors) ", 
-                            RecordCount, RecordSuccess, RecordError));
+            UI.WriteToLog(string.Format("Setup complete: {0} Total records processed", 
+                            RecordCount));
 
             UI.WriteToLog("\n***************Setup App END***************\n");
             MD.FinishUp();

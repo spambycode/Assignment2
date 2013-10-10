@@ -39,8 +39,8 @@ namespace PrettyPrintUtility
 
             fMainDataFile = new FileStream("MainData.bin", FileMode.Open);
             bMainDataFileReader = new BinaryReader(fMainDataFile);
-            nRec = bMainDataFileReader.ReadInt16();
-            nCol = bMainDataFileReader.ReadInt16();
+            nRec = (short)(bMainDataFileReader.ReadInt16() - 1);
+            nCol = (short)(bMainDataFileReader.ReadInt16() - 1);
 
 
             fCollisionDataFile = new FileStream("MainDataCollision.bin", FileMode.Open);
@@ -73,7 +73,7 @@ namespace PrettyPrintUtility
             float lifeExpectancy;                  //The average time someone is alive in the country
             int gnp;                               //Gross national product
             short link;
-            int RRN = 0;
+            int RRN = 1;
             string formatRecord;
             List<string> RecordCollection = new List<string>(); //List of formatted record strings
 
@@ -107,7 +107,7 @@ namespace PrettyPrintUtility
                                     string.Format("{0:#,###,###.##}", surfaceArea).PadLeft(10) +
                                     Convert.ToString(yearOfIndep).PadLeft(6).PadRight(7) +
                                     string.Format("{0:#,###,###,###}", population).PadLeft(13).PadRight(12) +
-                                    string.Format("{0:0.#}", lifeExpectancy).PadRight(1).PadLeft(5) +
+                                    string.Format("{0:0.0#}", lifeExpectancy).PadRight(1).PadLeft(5) +
                                     string.Format("{0:#,###,###,###}", gnp).PadLeft(10) +
                                     Convert.ToString(link).PadLeft(5);
                 }
