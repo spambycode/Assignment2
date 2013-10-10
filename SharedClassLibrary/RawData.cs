@@ -31,7 +31,7 @@ namespace SharedClassLibrary
         //**************************** PUBLIC CONSTRUCTOR(S) ***********************
 
         /// <summary>
-        /// Assign raw data via constructor.
+        /// Assign raw data via constructor.i
         /// </summary>
         /// <param name="recordSplit">Split fields of record</param>
         public RawData(string[] recordSplit)
